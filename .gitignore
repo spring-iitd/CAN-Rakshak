@@ -1,0 +1,28 @@
+# macOS system files
+**/.DS_Store
+
+# VS Code settings folders
+**/.vscode/
+
+# Python cache folders and files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Dataset folders (anywhere in the tree)
+**/datasets/
+
+# Model folders (anywhere in the tree)
+**/models/
+
+# Environment and build artifacts
+**/.env
+**/venv/
+**/*.egg-info/
+
+# (Optional) logs, checkpoints, or run directories
+**/logs/
+**/checkpoints/
+**/runs/
+
