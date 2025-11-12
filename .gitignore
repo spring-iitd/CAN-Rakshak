@@ -11,10 +11,12 @@
 **/*.pyd
 
 # Dataset folders (anywhere in the tree)
-**/datasets/
+**/datasets/*
+!**/datasets/.gitkeep
 
 # Model folders (anywhere in the tree)
-**/models/
+**/models/*
+!**/models/.gitkeep
 
 # Environment and build artifacts
 **/.env

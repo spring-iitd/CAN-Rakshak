@@ -1,17 +1,16 @@
 import sys
 import os
 
-from get_attack import get_attack
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from config import *
 from src.test import test_model
 from preprocessing import *
 from train import *
 from test import *
-from postprocessing import *
 from evaluate import *
 from get_splitter import get_splitter
 from get_extractor import get_extractor
+from get_attack import get_attack
 
 def main():
     # Set dataset path
@@ -31,7 +30,6 @@ def main():
         raise Exception(f"Not supported {train_test}")
     
     get_attack(ADV_ATTACK)
-    post_processing()
     
         
         
