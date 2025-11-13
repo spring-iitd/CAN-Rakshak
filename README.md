@@ -64,7 +64,7 @@ CAN-Rakshak is a framework for evaluating and benchmarking CAN Intrusion Detecti
 
 ## 📘 Documentation
 
-For complete setup, structure, and advanced details, visit the [📖 Full Documentation](docs/usage.md) or the [project wiki](https://github.com/spring-iitd/CAN-Rakshak/wiki).
+For complete setup, structure, and advanced details, visit the [📖 Full Documentation](docs/usage.md).
 
 ---
 
