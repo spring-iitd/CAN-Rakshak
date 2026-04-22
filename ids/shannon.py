@@ -1,5 +1,4 @@
 import os
-from config import *
 import pandas as pd
 import numpy as np
 from collections import Counter
@@ -10,7 +9,7 @@ import pickle
 
 class Shannon(IDS):
 
-    def __init__(self, time_window: float = 0.032768, k_factor: float = 5.25):
+    def __init__(self, time_window: float = 0.032768, k_factor: float = 3.25):
         """
         Initializes the analysis attack.
 
@@ -87,23 +86,20 @@ class Shannon(IDS):
         self.std_h_ = np.std(normal_entropies)
         print(f"Fit complete. Baseline Mean Entropy: {self.mean_h_:.4f}, Std Dev: {self.std_h_:.4f}")
 
-    def train(self, X_train=None, Y_train=None, **kwargs):
-        """
-        Trains the IDS using normal data from a CSV file.
-        """
+    def train(self, train_dataset_dir=None, X_train=None, Y_train=None, cfg=None, **kwargs):
+        cfg = cfg or {}
         updated_csv_file = os.path.join(
-            DIR_PATH, "..", "datasets", DATASET_NAME, "modified_dataset", FILE_NAME[:-4] + ".csv"
+            cfg.get('dir_path', ''), "..", "datasets", cfg.get('dataset_name', ''),
+            "modified_dataset", cfg.get('file_name', '')[:-4] + ".csv"
         )
         self.fit_from_csv(updated_csv_file)
         
 
-    def prepare_frame_list(self):
-        """
-        Loads attack data from CSV and converts it into a list of frame dictionaries.
-        Each dictionary contains 'timestamp' and 'data' keys.
-        """
+    def prepare_frame_list(self, cfg=None):
+        cfg = cfg or {}
         attack_data_path = os.path.join(
-            DIR_PATH, "..", "datasets", DATASET_NAME, "modified_dataset", FILE_NAME[:-4] + ".csv"
+            cfg.get('dir_path', ''), "..", "datasets", cfg.get('dataset_name', ''),
+            "modified_dataset", cfg.get('file_name', '')[:-4] + ".csv"
         )
         print(f"\nLoading attack data from '{os.path.basename(attack_data_path)}' for 'apply' method...")
 
@@ -117,7 +113,7 @@ class Shannon(IDS):
             lambda x: bytes([int(b, 16) if self._is_hex(b) else 0 for b in x])
         )
 
-        attack_frames = df_attack[['timestamp', 'data']].to_dict('records')
+        attack_frames = df_attack[['timestamp', 'data', 'label']].to_dict('records')
         print(f"Converted {len(attack_frames)} rows into 'frames' format.")
         return attack_frames
 
@@ -168,18 +164,19 @@ class Shannon(IDS):
         print(f"Analysis complete. Found {num_anomalies_found} anomalous windows.")
         return adv_frames
 
-    def test(self, X_test=None, Y_test=None, **kwargs):
-        """
-        Tests the IDS by applying it to attack data.
-        """
-        attack_frames = self.prepare_frame_list()
-        self.apply(attack_frames)
+    def test(self, X_test=None, Y_test=None, cfg=None, **kwargs):
+        attack_frames = self.prepare_frame_list(cfg=cfg)
+        adv_frames = self.apply(attack_frames)
+
+        all_preds  = np.array([int(f.get('anomaly_detected', False)) for f in adv_frames])
+        all_labels = np.array([1 if str(f['label']).strip().upper() in ('T', '1', 'ATTACK') else 0 for f in adv_frames])
+
+        return all_preds, all_labels
 
     def predict(self, X_test=None, **kwargs):
         pass
 
     def save(self, path):
-        """Saves the model parameters to a file."""
         with open(path, 'wb') as f:
             pickle.dump({
                 'mean_h_': self.mean_h_,
@@ -189,7 +186,6 @@ class Shannon(IDS):
             }, f)
 
     def load(self, path):
-        """Loads the model parameters from a file."""
         with open(path, 'rb') as f:
             data = pickle.load(f)
         self.mean_h_ = data['mean_h_']

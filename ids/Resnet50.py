@@ -1,30 +1,31 @@
-import sys
-import os
-
-from sklearn.model_selection import KFold
-
-from ids.base import IDS
+from common_imports import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'features')))
-import torch
-from torchvision import models
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, Subset
-from torchvision import datasets, transforms, models
-import numpy as np
+from common_imports import (
+    datetime, KFold, StandardScaler, np, plt, F,
+    confusion_matrix, ConfusionMatrixDisplay,
+    precision_score, recall_score, f1_score, accuracy_score,
+    torch, nn, optim, DataLoader, TensorDataset, Subset,
+    transforms, tv_models as models,
+)
 from PIL import Image
-import torch.nn.functional as F
+from ids.base import IDS
  # Define transformations and dataset paths
 data_transforms = {
     'test': transforms.Compose([transforms.ToTensor()]),
     'train': transforms.Compose([transforms.ToTensor()])
 }
 
-class Densenet161(IDS):
+class ResNet50(IDS):
     def __init__(self):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model = models.densenet161(weights=models.DenseNet161_Weights.DEFAULT)
-        self.model.classifier = nn.Linear(self.model.classifier.in_features, 2)
+        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # resnet50.classifier is a Sequential; replace the final Linear layer
+        # to match our binary classification (2 classes)
+        # obtain in_features from the last module
+         
+        in_features = self.model.fc.in_features
+        self.model.fc = nn.Linear(in_features, 2)  # Binary classification (2 classes)
+        self.model = self.model.to(self.device)
 
     def train(self, train_dataset_dir, X_train=None, Y_train=None, cfg=None, **kwargs):
         cfg = cfg or {}
@@ -58,7 +59,6 @@ class Densenet161(IDS):
         self.model.eval()
         scripted_model = torch.jit.script(self.model)
         scripted_model.save(path)
-        # torch.save(self.model.state_dict(), path)
         print("Model saved.")
  
 
@@ -71,6 +71,8 @@ class Densenet161(IDS):
 
     def load_labels(self, label_file):
         """Load image labels from the label file."""
+        print("Lable file : ", label_file)
+
         labels = {}
         with open(label_file, 'r') as file:
             for line in file:
@@ -109,7 +111,7 @@ class Densenet161(IDS):
     
     
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     
         model = model.to(device)
     
@@ -146,7 +148,7 @@ class Densenet161(IDS):
     
         return model
     
-    def k_fold_cross_validate(self,dataloader, device, model_type='densenet161', k=5, batch_size=32):
+    def k_fold_cross_validate(self,dataloader, device, model_type='convnext_base', k=5, batch_size=32):
         """
         Performs k-fold cross-validation given a DataLoader.
         It extracts the dataset from the dataloader and splits it.
@@ -194,7 +196,7 @@ class Densenet161(IDS):
             # Save best model
             if acc > best_acc:
                 best_acc = acc
-                torch.save(model.state_dict(), 'densenet161_surrogate_gear.pth')
+                torch.save(model.state_dict(), 'convnext_surrogate_gear.pth')
                 print(f' Best model updated and saved (Acc: {best_acc:.2f}%)')
 
         print("\n=== Cross-validation complete ===")

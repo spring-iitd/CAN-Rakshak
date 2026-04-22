@@ -20,10 +20,10 @@ data_transforms = {
     'train': transforms.Compose([transforms.ToTensor()])
 }
 
-class Densenet161(IDS):
+class DenseNet121(IDS):
     def __init__(self):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model = models.densenet161(weights=models.DenseNet161_Weights.DEFAULT)
+        self.model = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
         self.model.classifier = nn.Linear(self.model.classifier.in_features, 2)
 
     def train(self, train_dataset_dir, X_train=None, Y_train=None, cfg=None, **kwargs):
@@ -109,7 +109,7 @@ class Densenet161(IDS):
     
     
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     
         model = model.to(device)
     
@@ -146,7 +146,7 @@ class Densenet161(IDS):
     
         return model
     
-    def k_fold_cross_validate(self,dataloader, device, model_type='densenet161', k=5, batch_size=32):
+    def k_fold_cross_validate(self,dataloader, device, model_type='DenseNet121', k=5, batch_size=32):
         """
         Performs k-fold cross-validation given a DataLoader.
         It extracts the dataset from the dataloader and splits it.
@@ -194,7 +194,7 @@ class Densenet161(IDS):
             # Save best model
             if acc > best_acc:
                 best_acc = acc
-                torch.save(model.state_dict(), 'densenet161_surrogate_gear.pth')
+                torch.save(model.state_dict(), 'DenseNet121_surrogate_gear.pth')
                 print(f' Best model updated and saved (Acc: {best_acc:.2f}%)')
 
         print("\n=== Cross-validation complete ===")

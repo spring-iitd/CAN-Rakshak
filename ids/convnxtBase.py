@@ -20,11 +20,23 @@ data_transforms = {
     'train': transforms.Compose([transforms.ToTensor()])
 }
 
-class Densenet161(IDS):
+class ConvNeXtBase(IDS):
     def __init__(self):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model = models.densenet161(weights=models.DenseNet161_Weights.DEFAULT)
-        self.model.classifier = nn.Linear(self.model.classifier.in_features, 2)
+        self.model = models.convnext_base(weights=models.ConvNeXt_Base_Weights.DEFAULT)
+        # convnext_base.classifier is a Sequential; replace the final Linear layer
+        # to match our binary classification (2 classes)
+        # obtain in_features from the last module
+        if isinstance(self.model.classifier, nn.Sequential):
+            # assume last element is Linear
+            last_linear = self.model.classifier[-1]
+            in_feats = last_linear.in_features if hasattr(last_linear, 'in_features') else None
+            if in_feats is None:
+                raise ValueError("Unexpected classifier structure, no in_features found")
+            self.model.classifier[-1] = nn.Linear(in_feats, 2)
+        else:
+            # fallback for any other structure
+            self.model.classifier = nn.Linear(getattr(self.model.classifier, 'in_features', 0), 2)
 
     def train(self, train_dataset_dir, X_train=None, Y_train=None, cfg=None, **kwargs):
         cfg = cfg or {}
@@ -58,7 +70,6 @@ class Densenet161(IDS):
         self.model.eval()
         scripted_model = torch.jit.script(self.model)
         scripted_model.save(path)
-        # torch.save(self.model.state_dict(), path)
         print("Model saved.")
  
 
@@ -109,7 +120,7 @@ class Densenet161(IDS):
     
     
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+        optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     
         model = model.to(device)
     
@@ -146,7 +157,7 @@ class Densenet161(IDS):
     
         return model
     
-    def k_fold_cross_validate(self,dataloader, device, model_type='densenet161', k=5, batch_size=32):
+    def k_fold_cross_validate(self,dataloader, device, model_type='convnext_base', k=5, batch_size=32):
         """
         Performs k-fold cross-validation given a DataLoader.
         It extracts the dataset from the dataloader and splits it.
@@ -194,7 +205,7 @@ class Densenet161(IDS):
             # Save best model
             if acc > best_acc:
                 best_acc = acc
-                torch.save(model.state_dict(), 'densenet161_surrogate_gear.pth')
+                torch.save(model.state_dict(), 'convnext_surrogate_gear.pth')
                 print(f' Best model updated and saved (Acc: {best_acc:.2f}%)')
 
         print("\n=== Cross-validation complete ===")
