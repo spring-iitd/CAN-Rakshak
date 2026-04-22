@@ -1,13 +1,13 @@
-import os
-
+from common_imports import os
 from get_ids import get_model
+from evaluate import evaluation_metrics
 
-def test_model(modelName, modelPath, adv_attack,image = None, TestSplit = None ):
-    """Tests the specified IDS model unless an adversarial attack is specified."""
-    if(adv_attack):
-        return 
+def test_model(modelName, modelPath, cfg, adv_attack=None, image=None, TestSplit=None):
     model = get_model(modelName)
     print(f"Loading model from {os.path.normpath(modelPath)}")
-    model.load(modelPath)    
-    model.test()
+    model.load(modelPath)
+    result = model.test(cfg=cfg)
+    if isinstance(result, tuple) and len(result) == 2:
+        preds, labels = result
+        evaluation_metrics(preds, labels, cfg)
     print("Testing Completed")
