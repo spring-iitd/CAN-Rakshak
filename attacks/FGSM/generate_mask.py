@@ -1,7 +1,6 @@
 import torch
 import random
 
-
 def select_row_to_perturb(mask, data_grad, filtered_matched_rows, selected_rows_set, perturbation_type):
     """
     Selects one row from filtered_matched_rows based on perturbation_type:
@@ -13,35 +12,28 @@ def select_row_to_perturb(mask, data_grad, filtered_matched_rows, selected_rows_
         gradients = []
 
         for row in filtered_matched_rows:
-            # Gradients for the current row (only in active mask bits)
             row_mask = mask[:, :, row, :].bool()
             row_grad = data_grad[:, :, row, :]
 
-            # Gradient magnitude only where mask is active
             gradient_magnitude = row_grad.abs() * row_mask
             total_gradient = gradient_magnitude.sum().item()
 
             gradients.append((row, total_gradient))
 
-        # We can remove if gradients condition as gradients will always be non-empty as matched_rows is always non-empty
         if gradients:
             selected_row, _ = max(gradients, key=lambda x: x[1])
         
     elif perturbation_type == "Random":
-        # Randomly select a row from filtered_matched_rows that is not in selected_rows_set
         selected_row = random.choice(filtered_matched_rows)
 
-    # Update mask to keep only selected row’s active bits
     updated_mask = torch.zeros_like(mask)
     updated_mask[:, :, selected_row, :] = mask[:, :, selected_row, :]
 
-    # Add row to the set of already selected rows
     selected_rows_set.add(selected_row)
 
     return selected_row, updated_mask, selected_rows_set
 
 def find_max_perturbations(image,pattern_length,rgb_pattern,matched_rows,ifprint):
-    # If matched_rows is empty, perform the initial computation to find rows matching the pattern
     if matched_rows is None:
         matched_rows = []
         
@@ -53,7 +45,6 @@ def find_max_perturbations(image,pattern_length,rgb_pattern,matched_rows,ifprint
             matches_pattern &= (image[:, 0, i, j] == r) & (image[:, 1, i, j] == g) & (image[:, 2, i, j] == b)
 
         if matches_pattern.any():
-            # Collect row indices of matching rows
             matched_rows.extend(
                 [i for b in range(image.shape[0]) if matches_pattern[b]]
             )
@@ -63,7 +54,6 @@ def find_max_perturbations(image,pattern_length,rgb_pattern,matched_rows,ifprint
     
     max_perturbations = len(matched_rows)
     return matched_rows, max_perturbations
-
 
 def generate_mask_modify(image, data_grad, matched_rows,selected_rows_set,bit_pattern, perturbation_type):
     """
@@ -86,7 +76,6 @@ def generate_mask_modify(image, data_grad, matched_rows,selected_rows_set,bit_pa
     if not matched_rows:
         matched_rows, max_perturbations = find_max_perturbations(image,pattern_length,rgb_pattern,matched_rows,ifprint=True)
 
-    # Filter matched_rows to exclude rows in selected_rows_set
     filtered_matched_rows = [row for row in matched_rows if row not in selected_rows_set]
 
     
@@ -94,18 +83,16 @@ def generate_mask_modify(image, data_grad, matched_rows,selected_rows_set,bit_pa
         print("[WARN] No rows left to perturb for this image.")
         return torch.zeros_like(mask), matched_rows, selected_rows_set
 
-    # Apply the mask for rows that match the pattern and are not yet selected
     for row in filtered_matched_rows:
         for b in range(image.shape[0]):
             mask[b, :, row, sof_len:sof_len + id_mask_length] = 1   #mask id
             mask[b, :, row, sof_len + id_mask_length+mid_bits_length:sof_len + id_mask_length+mid_bits_length+64 ] = 1   #mask data
     
-    
     selected_row, updated_mask, selected_rows_set = select_row_to_perturb(mask, data_grad, filtered_matched_rows, selected_rows_set, perturbation_type)
     
-    print("selected row for modification: ",selected_row)               
-    return updated_mask, matched_rows, selected_rows_set
+    print("selected row for modification: ",selected_row)
 
+    return updated_mask, matched_rows, selected_rows_set
 
 def extract_color_channels(image):
     """Extracts the red, green, and blue channels from an image tensor."""
@@ -118,12 +105,10 @@ def create_green_mask(red_channel, green_channel, blue_channel):
     """Creates a mask for rows where all pixels are exactly (0, 1, 0), i.e., green."""
     return (red_channel == 0) & (green_channel == 1) & (blue_channel == 0)
 
-
 def initialize_mask(image):
     """Initializes a mask of zeros with the same dimensions as the input image."""
     mask = torch.zeros_like(image, dtype=torch.float)
     return mask
-
 
 def compute_row_gradient_magnitude(data_grad, row_idx):
 
@@ -150,7 +135,6 @@ def initialize_max_grad_variables(batch_size, num_rows, device):
     max_grad_row = torch.zeros(batch_size, dtype=torch.long, device=device)
     return max_grad, max_grad_row
 
-
 def find_rows_with_green(green_mask):
     """Finds rows that contain green pixels by summing along the width dimension."""
     No_green_row = False
@@ -170,13 +154,11 @@ def select_random_rows(rows_with_green, numberofrows):
     else:
         return rows_with_green
 
-
 def create_mask(mask, selected_rows):
     """Sets the selected rows in the mask to 1."""
     for row in selected_rows:
         mask[:, :, row, :] = 1.0
     return mask
-
 
 def generate_multiple_mask_random(image, pack):
     red_channel, green_channel, blue_channel = extract_color_channels(image)
@@ -191,11 +173,7 @@ def generate_multiple_mask_random(image, pack):
     
     return mask
 
-
-
 def generate_max_grad_mask(image, data_grad):
-    # Assuming 'image' is of shape [batch_size, 3, 128, 128]
-    # We need to identify the green channel which is the 2nd channel in this format
     red_channel, green_channel, blue_channel = extract_color_channels(image)
     green_mask = create_green_mask(red_channel, green_channel, blue_channel)
     max_grad, max_grad_row = initialize_max_grad_variables(green_channel.shape[0], green_channel.shape[1], image.device)
@@ -203,10 +181,8 @@ def generate_max_grad_mask(image, data_grad):
     updated_flag = False  # <-- Flag to check if max_grad ever updates
 
     for i in range(green_channel.shape[1]):  # iterate over rows
-        # Check if all pixels in the row are green
         all_green = green_mask[:, i, :].all(dim=1)
 
-        # Compute gradient magnitude for the row
         row_grad_magnitude = compute_row_gradient_magnitude(data_grad, i)
 
         prev_max_grad = max_grad.clone()  # save before update
@@ -216,9 +192,9 @@ def generate_max_grad_mask(image, data_grad):
         if not torch.equal(prev_max_grad, max_grad):  # If max_grad changed
             updated_flag = True
 
-    # Create a mask to apply the sign data gradient only in the identified rows with max gradient
     mask = initialize_mask(data_grad)
     print("max_grad_row_indices for injection: ",max_grad_row.item())
+    
     mask = create_mask_for_max_grad_row(mask, max_grad_row, image.shape)
     
     if not updated_flag:

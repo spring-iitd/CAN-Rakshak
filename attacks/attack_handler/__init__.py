@@ -1,9 +1,10 @@
 import os
 import importlib
 import inspect
+from .base import Attack
 
-__all__ = []          
-__all_classes__ = []  
+__all__ = []           # Optional: names exported via `from myfolder import *`
+__all_classes__ = []   # List of class objects
 
 package_name = __name__
 current_dir = os.path.dirname(__file__)
@@ -15,6 +16,9 @@ for filename in os.listdir(current_dir):
 
         for name, obj in inspect.getmembers(module, inspect.isclass):
             if obj.__module__ == f'{package_name}.{module_name}':
-                globals()[name] = obj            
-                __all__.append(name)             
-                __all_classes__.append(obj)      
+                # Only register Attack subclasses, not helper/model classes
+                if issubclass(obj, Attack) and obj is not Attack:
+                    globals()[name] = obj             # Make class directly accessible
+                    __all__.append(name)              # (Optional) For wildcard imports
+                    __all_classes__.append(obj)       # Store the class object
+
