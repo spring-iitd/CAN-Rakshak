@@ -1,125 +1,66 @@
-from config import *
 from .base import BaseSplitter
-import pandas as pd
-import os   
-import re
-import shutil
+import os
+import csv
+import numpy as np
+
 
 class Default(BaseSplitter):
-    def __init__(self, input_dir, feature_extractor):
+    def __init__(self, input_dir, feature_extractor, cfg):
         super().__init__(input_dir)
-        self.split_ratio = SPLIT_RATIO
+        self.split_ratio       = cfg['split_ratio']
         self.feature_extractor = feature_extractor
-    
-    
+        self.cfg               = cfg
 
     def split(self):
-        split_and_store_data()
-            
-    
-def extract_number(filename):
-    match = re.search(r'(\d+)', filename)
-    return int(match.group(0)) if match else float('inf')  # non-number files at the end
+        cfg       = self.cfg
+        file_name = cfg['file_name']
+        prefix    = file_name[:-4]
 
-valid_exts = {".png", ".jpg", ".jpeg", ".bmp", ".tiff"}  # allowed image extensions
-def extract_files(src_folder):
-    
-    return [
-        f for f in os.listdir(src_folder) 
-        if os.path.splitext(f)[1].lower() in valid_exts
-    ]
+        features_path = self.feature_extractor.features_path
+        features_csv  = os.path.join(features_path, "Stat", prefix + "_features.csv")
+        labels_csv    = os.path.join(features_path, "Stat", prefix + "_labels.csv")
 
-def sequential_split_images(src_folder, train_folder, test_folder, split_ratio=0.2):
-    # Create destination folders if they don’t exist
-    os.makedirs(train_folder, exist_ok=True)
-    os.makedirs(test_folder, exist_ok=True)
+        if not (os.path.exists(features_csv) and os.path.exists(labels_csv)):
+            print(f"  No Stat features found at {os.path.dirname(features_csv)}, skipping split.")
+            return
 
-    # List images and sort them (sequential order)
-    images = extract_files(src_folder)
-    
-    total = len(images)
-    split_index = total - int(total * split_ratio)
+        X_all, y_all = self.load_stat_features(features_csv, labels_csv)
+        split_index  = int((1 - self.split_ratio) * X_all.shape[0])
+        x_train, y_train = X_all[:split_index], y_all[:split_index]
+        x_test,  y_test  = X_all[split_index:],  y_all[split_index:]
 
+        train_dir = os.path.join(self.input_dir, "train", cfg['train_dataset_dir'])
+        test_dir  = os.path.join(self.input_dir, "test",  cfg['test_dataset_dir'])
+        os.makedirs(train_dir, exist_ok=True)
+        os.makedirs(test_dir,  exist_ok=True)
 
-    sorted_images = sorted(images, key=extract_number)
+        self.save_stat_features(x_train, y_train,
+                                os.path.join(train_dir, prefix + "_train_features.csv"),
+                                os.path.join(train_dir, prefix + "_train_labels.csv"))
+        self.save_stat_features(x_test,  y_test,
+                                os.path.join(test_dir,  prefix + "_test_features.csv"),
+                                os.path.join(test_dir,  prefix + "_test_labels.csv"))
+        np.savez(os.path.join(train_dir, prefix + "_train_data.npz"), x_train=x_train, y_train=y_train)
+        np.savez(os.path.join(test_dir,  prefix + "_test_data.npz"),  x_test=x_test,  y_test=y_test)
+        print(f"  Split          : Train={len(y_train)}, Test={len(y_test)}")
 
-    train_images = sorted_images[:split_index]
-    test_images = sorted_images[split_index:]
+    def load_stat_features(self, features_csv, labels_csv):
+        X = np.loadtxt(features_csv, delimiter=",")
 
-    for img in train_images:
-        shutil.copy(os.path.join(src_folder, img), os.path.join(train_folder, img))
+        labels = []
+        with open(labels_csv, "r") as f:
+            reader = csv.reader(f)
+            next(reader)  # skip header
+            for row in reader:
+                labels.append(int(row[1]))
 
-    for img in test_images:
-        shutil.copy(os.path.join(src_folder, img), os.path.join(test_folder, img))
+        return X, np.array(labels)
 
+    def save_stat_features(self, X, Y, features_csv, labels_csv):
+        np.savetxt(features_csv, X, delimiter=",")
 
-def split_labels(label_file, train_images, test_images, train_label_file, test_label_file):
-    # Load labels into dictionary
-    labels = {}
-    with open(label_file, "r") as f:
-        for line in f:
-            if ":" in line:
-                img, lab = line.strip().split(":", 1)
-                labels[img.strip()] = lab.strip()
-
-    # Write train labels
-    with open(train_label_file, "w") as f:
-        for img in train_images:
-            if img in labels:
-                f.write(f"{img}: {labels[img]}\n")
-
-    # Write test labels
-    with open(test_label_file, "w") as f:
-        for img in test_images:
-            if img in labels:
-                f.write(f"{img}: {labels[img]}\n")
-
-
-
-def split_track_csv(track_csv, train_images, test_images, train_csv, test_csv):
-    # Load the CSV
-    df = pd.read_csv(track_csv)
-    df.columns = df.columns.str.strip()
-
-    # Strip extensions from image filenames to match 'image_no'
-    train_img_nums = {int(''.join(filter(str.isdigit, img))) for img in train_images}
-    test_img_nums  = {int(''.join(filter(str.isdigit, img))) for img in test_images}
-
-    # Filter rows based on image_no
-    train_df = df[df["image_no"].isin(train_img_nums)]
-    test_df  = df[df["image_no"].isin(test_img_nums)]
-
-    # Save
-    train_df.to_csv(train_csv, index=False)
-    test_df.to_csv(test_csv, index=False)
-
-    print(f"Track split → Train rows: {len(train_df)}, Test rows: {len(test_df)}")
-
-
-
-def split_and_store_data():
-    if(not SPLIT):
-        return 
-    input_dir = os.path.join(DIR_PATH, "..", "datasets", DATASET_NAME)
-
-    print("Splitting dataset into Train and Test")
-    train_dir = os.path.join(input_dir,"train",TRAIN_DATASET_DIR)  
-    test_dir = os.path.join(input_dir,"test", TEST_DATASET_DIR)
-    input_directory = os.path.join(input_dir, "features", "Images", FILE_NAME[:-4]+"_images")
-
-
-    test_size = SPLIT_RATIO   
-
-    sequential_split_images(input_directory, train_dir, test_dir, test_size)
-
-    if(FEATURE_EXTRACTOR == "PixNet"):
-        label_file = os.path.join(input_directory, "labels.txt")
-        train_images = sorted(extract_files(train_dir), key=extract_number)
-        test_images = sorted(extract_files(test_dir), key=extract_number)
-        train_label_file = os.path.join(train_dir, "labels.txt")
-        test_label_file = os.path.join(test_dir, "labels.txt")
-        split_labels(label_file, train_images, test_images, train_label_file, test_label_file)
-        csv_file = os.path.join(input_dir, "csv_files",  FILE_NAME[:-4]+"_track.csv")
-        train_track_csv_file = os.path.join(train_dir, "track.csv")
-        test_track_csv_file = os.path.join(test_dir, "track.csv")
-        split_track_csv(csv_file, train_images, test_images, train_track_csv_file, test_track_csv_file)
+        with open(labels_csv, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["sample_id", "label"])
+            for i, label in enumerate(Y):
+                writer.writerow([i, label])
