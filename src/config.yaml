@@ -1,0 +1,61 @@
+run_steps:
+  dataset_processing: false
+  training: false
+  testing: true
+  adversarial_perturbation: false
+  robust_training: false
+
+dataset_name: Syn_spoof
+file_name: OTIDS_spoof_dataset_test_without_data.csv           
+                                 
+
+dataset_processing:
+  preprocess: false
+  split: false                   
+  split_mode: default
+  split_ratio: 0.2
+  feature_extraction: true
+  feature_extractor: PixNet
+
+training:
+  model: Densenet161
+  model_name: syn_spoof_wo_data
+  epochs: 10
+  train_dataset_dir: OTIDS_spoof_dataset_surrogate_without_data_images
+
+testing:
+  model: Densenet161
+  model_name: syn_spoof_wo_data
+  test_dataset_dir: OTIDS_spoof_dataset_test_without_data_images   
+
+adversarial_perturbation:
+  evasion_attack: BitFlipAttack 
+  surrogate_model : /home/isha/Documents/Adv_Attacks_Defenses/New_CAN_IDS_Pipeline/CANShield_updated/models/Densenet161_CH_DoS_surrogate.h5
+  target_model : /home/isha/Documents/Adv_Attacks_Defenses/New_CAN_IDS_Pipeline/CANShield_updated/models/FrameInceptionResnet_CH_DoS_target.h5
+
+  GeneticAdvAttack:
+    attack_mode: dos              # dos | fuzzy | spoof
+    model_path : "Trained_models/target.pth"
+
+  FGSM: {}   # uses top-level surrogate_model and target_model
+
+  BitFlipAttack:
+    rounds: 3
+
+    attack:
+      original_tracksheet: /home/isha/Documents/Adv_Attacks_Defenses/New_CAN_IDS_Pipeline/CANShield_updated/datasets/Demo_dataset/csv_files/DoS_test_track.csv
+      output_dir: "perturbed_target_images_dos_CH"
+
+    decode:
+      decoded_output_dir: "decoded_traffic_dos_CH"
+
+    evaluate:
+      prediction_output_dir: "prediction_output_dos_CH"
+
+    update:
+      tracksheet_dir: "tracksheets_CH"
+  
+adversarial_defense:
+  defense_method: AdversarialTraining
+  adv_samples: 350
+  adv_examples_path: null
