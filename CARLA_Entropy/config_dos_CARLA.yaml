@@ -1,0 +1,23 @@
+run_steps:
+  attack: True
+  decode: True
+  evaluate: True
+  update: True
+
+
+attack:
+  original_test_dir: "CARLA_dataset/DoS/Surrogate/test_images"
+  original_label_file: "CARLA_dataset/DoS/Surrogate/test_labels.txt"
+  original_tracksheet: "CARLA_dataset/DoS/Surrogate/test_track.csv"
+  surrogate_model: "Trained_models/densenet161_surrogate_CARLA_DoS.pth"
+  output_dir: "perturbed_images_dos_CARLA"
+
+decode:
+  decoded_output_dir: "decoded_traffic_dos_CARLA"
+
+evaluate:
+  model_path: "Trained_models/CARLA_DoS_og_final_model.h5"
+  prediction_output_dir: "prediction_output_dos_CARLA"
+
+update:
+  tracksheet_dir: "tracksheets_CARLA"

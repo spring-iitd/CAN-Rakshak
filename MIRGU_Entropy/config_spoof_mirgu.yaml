@@ -1,0 +1,23 @@
+run_steps:
+  attack: True
+  decode: True
+  evaluate: True
+  update: True
+
+
+attack:
+  original_test_dir: "spoof_dataset/Mirgu_break_spoof_arbitrated_data/Surrogate/spoof_images_mirgu"
+  original_label_file: "spoof_dataset/Mirgu_break_spoof_arbitrated_data/Surrogate/test_labels.txt"
+  original_tracksheet: "spoof_dataset/Mirgu_break_spoof_arbitrated_data/Surrogate/test_track.csv"
+  surrogate_model: "Trained_models/densenet161_surrogate_Mirgu_break_arbitrated_data_spoof_updated.pth"
+  output_dir: "perturbed_images_spoof_mirgu"
+
+decode:
+  decoded_output_dir: "decoded_traffic_spoof_mirgu"
+
+evaluate:
+  model_path: "Trained_models/Mirgu_break_spoof.h5"
+  prediction_output_dir: "prediction_output_spoof_mirgu"
+
+update:
+  tracksheet_dir: "tracksheets_mirgu"
