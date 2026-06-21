@@ -33,6 +33,7 @@ def build_config(yaml_cfg):
     ts = yaml_cfg.get('testing', {})
     ap = yaml_cfg.get('adversarial_perturbation', {})
     ad = yaml_cfg.get('adversarial_defense', {})
+    da = yaml_cfg.get('data_augmentation', {})
     run_steps = yaml_cfg.get('run_steps', {})
 
     # Only treat an evasion attack as "active" if Stage 4 is actually enabled.
@@ -97,6 +98,17 @@ def build_config(yaml_cfg):
         'defense_method':    ad.get('defense_method',    'AdversarialTraining'),
         'adv_examples_path': ad.get('adv_examples_path', None),
         'adv_samples':       ad.get('adv_samples',       800),
+
+        # data_augmentation
+        'augmentation': {
+            'attack_type':    da.get('attack_type',    'dos'),
+            'input_path':     da.get('input_path',     ''),
+            'output_path':    da.get('output_path',    ''),
+            'payload_mode':   da.get('payload_mode',   'random'),
+            'target_id':      da.get('target_id',      None),
+            'max_injections': da.get('max_injections', 10),
+            'predictor':      da.get('predictor',      {}),
+        },
     }
 
 
@@ -107,6 +119,7 @@ def run_pipeline(yaml_cfg):
     from preprocessing import preprocess
     from get_extractor import get_extractor
     from get_splitter import get_splitter
+    from get_augmentor import get_augmentor
     from train import train_model
     from test import test_model
     from get_attack import get_attack
@@ -128,53 +141,74 @@ def run_pipeline(yaml_cfg):
 
     # Stage 1: Dataset Processing
     if run_steps.get('dataset_processing', False):
-        print("[Stage 1/5] Dataset Processing")
+        print("[Stage 1/7] Dataset Processing")
         print("-" * 40)
         preprocess(dataset_path)
-        extractor = get_extractor(cfg['feature_extractor'], cfg)
+        extractor = get_extractor(cfg['feature_extractor'], cfg) if cfg.get('feature_extraction', False) else None
         if cfg.get('split', False):
             get_splitter(dataset_path, mode=cfg['split_mode'], feature_extractor=extractor, cfg=cfg)
-        print("[Stage 1/5] Done")
+        print("[Stage 1/7] Done")
         print()
 
-    # Stage 2: Training
+    # Stage 2: Data Augmentation
+    if run_steps.get('data_augmentation', False):
+        print("[Stage 2/7] Data Augmentation")
+        print("-" * 40)
+        aug_cfg     = cfg['augmentation']
+        input_path  = os.path.join(PROJECT_ROOT, aug_cfg['input_path'])
+        output_path = os.path.join(PROJECT_ROOT, aug_cfg['output_path'])
+        augmentor   = get_augmentor(aug_cfg['attack_type'], aug_cfg)
+        augmentor.augment(input_path, output_path)
+        print("[Stage 2/7] Done")
+        print()
+
+    # Stage 3: Dataset Analysis
+    if run_steps.get('run_analysis', False):
+        print("[Stage 3/7] Dataset Analysis")
+        print("-" * 40)
+        from run_analysis import run_dataset
+        run_dataset(cfg['dataset_name'], 'modified_dataset', False)
+        print("[Stage 3/7] Done")
+        print()
+
+    # Stage 4: Training
     if run_steps.get('training', False):
-        print("[Stage 2/5] Training")
+        print("[Stage 4/7] Training")
         print("-" * 40)
         model_name = cfg['train_model'] + "_" + cfg['train_model_name'] + ".h5"
         model_path = os.path.join(PROJECT_ROOT, "models", model_name)
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         train_model(cfg['train_model'], model_path, cfg)
-        print("[Stage 2/5] Done")
+        print("[Stage 4/7] Done")
         print()
 
-    # Stage 3: Testing
+    # Stage 5: Testing
     if run_steps.get('testing', False):
-        print("[Stage 3/5] Testing")
+        print("[Stage 5/7] Testing")
         print("-" * 40)
         model_name = cfg['test_model'] + "_" + cfg['test_model_name'] + ".h5"
         model_path = os.path.join(PROJECT_ROOT, "models", model_name)
         test_model(cfg['test_model'], model_path, cfg, adv_attack=cfg['evasion_attack'])
-        print("[Stage 3/5] Done")
+        print("[Stage 5/7] Done")
         print()
 
-    # Stage 4: Adversarial Perturbation
+    # Stage 6: Adversarial Perturbation
     if run_steps.get('adversarial_perturbation', False):
-        print("[Stage 4/5] Adversarial Perturbation")
+        print("[Stage 6/7] Adversarial Perturbation")
         print("-" * 40)
         get_attack(cfg)
-        print("[Stage 4/5] Done")
+        print("[Stage 6/7] Done")
         print()
 
-    # Stage 5: Robust Training
+    # Stage 7: Robust Training
     if run_steps.get('robust_training', False):
-        print("[Stage 5/5] Robust Training")
+        print("[Stage 7/7] Robust Training")
         print("-" * 40)
         adv_examples_path = cfg.get('adv_examples_path')
         model_name = cfg['train_model'] + "_" + cfg['train_model_name'] + ".h5"
         model_path = os.path.join(PROJECT_ROOT, "models", model_name)
         adversarial_retraining(model_path, adv_examples_path, cfg, adversarial_samples_limit=cfg['adv_samples'])
-        print("[Stage 5/5] Done")
+        print("[Stage 7/7] Done")
         print()
 
     print("=" * 55)

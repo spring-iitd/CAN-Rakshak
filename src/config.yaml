@@ -1,60 +1,129 @@
-run_steps:
-  dataset_processing: false
-  training: false
-  testing: true
-  adversarial_perturbation: false
-  robust_training: false
 
-dataset_name: Syn_spoof
-file_name: OTIDS_spoof_dataset_test_without_data.csv           
-                                 
+run_steps:
+  dataset_processing: false      # Preprocess / split / extract features from raw CSV
+  data_augmentation: true       # Inject synthetic attack traffic into a dataset
+  run_analysis: false            # Run exploratory data analysis
+  training: false                 # Train the IDS model
+  testing: false                 # Evaluate the IDS model on a test set
+  adversarial_perturbation: false # Generate adversarial examples against the IDS
+  robust_training: false         # Retrain the IDS using adversarial defense
+
+
+# Dataset
+# dataset_name: folder name under datasets/
+
+# file_name: CSV file inside that dataset folder (e.g. target_training.csv,
+#            DoS_dataset.csv, DoS_test.csv, DoS_surrogate.csv …)
+
+dataset_name: MIRGU
+file_name: Benign_day6_file1.log
+
+
+# Dataset Processing
 
 dataset_processing:
-  preprocess: false
-  split: false                   
-  split_mode: default
-  split_ratio: 0.2
-  feature_extraction: true
-  feature_extractor: PixNet
+  preprocess: true              # Apply raw cleaning (.csv)
+  split: false                    # Split the dataset into train/test subsets
+  split_mode: threeway           # default: single train/test split, threeway : splits dataset into three parts
+  split_ratio: 0.5               # Fraction of data used for training 
+  feature_extraction: false       # Convert raw CAN frames to feature representation
+  feature_extractor: FrameBuilder # FrameBuilder | Stat | SynCANExtractor | PixNet
+
+
+# Data Augmentation  (inject synthetic attack traffic)
+
+data_augmentation:
+  attack_type: dos                                        # dos | spoof
+  input_path: datasets/synthetic_data/DoS_attack.csv      # relative to project root
+  output_path: datasets/synthetic_data/DoS_attack_valid_id_predicted_payload.csv
+  payload_mode: predicted                                 # random : random hex bytes per field, valid: sampled from real observed payloads, predicted  – LSTM-predicted next payload
+  target_id: '0000'                                       # spoof only: CAN ID to impersonate
+  max_injections: 10                                      # spoof only: max injected packets per gap
+
+  # Payload predictor settings — only used when payload_mode: predicted
+  predictor:
+    seq_len:     5      # how many past payloads to use as context
+    epochs:      30     # training passes over the dataset
+    lr:          0.001  # learning rate
+    min_samples: 20     # IDs with fewer samples fall back to random sampling
+    model_path: models/payload_predictor.pt  # cache path; set to null to retrain every run
+    evaluate:    false  # set to true to print MAE quality report after training
+
+
+# Training
+# model: IDS architecture class name
+#   Options: Densenet161Weighted | Densenet161 | DenseNet121 |
+#            FrameInceptionResNetWeighted | FrameInceptionResNet |
+#            ResNet50 | Resnet | ConvNeXtBase | CANShield |
+#            RandomForest | DecisionTree | MLP | Shannon
+# model_name: filename stem used when saving the trained model (.h5 / .pth)
+# epochs: number of training epochs (integer)
+# train_dataset_dir: directory containing features
 
 training:
-  model: Densenet161
-  model_name: syn_spoof_wo_data
-  epochs: 10
-  train_dataset_dir: OTIDS_spoof_dataset_surrogate_without_data_images
+  model: Resnet50
+  model_name: carla_spoof_target_2inj_surr_dataset
+  epochs: 7
+  train_dataset_dir: spoof_training_2inj_images
+
+
+# Testing
+# model / model_name: must match the architecture and saved weights used in training
+# test_dataset_dir: directory containing test images/features
 
 testing:
-  model: Densenet161
-  model_name: syn_spoof_wo_data
-  test_dataset_dir: OTIDS_spoof_dataset_test_without_data_images   
+  model: Resnet50
+  model_name: carla_spoof_target_2inj_surr_dataset
+  test_dataset_dir: spoof_test_2inj_images
+
+
+# Adversarial Perturbation
+# evasion_attack: which attack handler to run
+#   Options: BitFlipAttack | FGSM | GeneticAdvAttack
+# surrogate_model: absolute path to the surrogate model (.h5)
+# target_model:   absolute path to the target 
 
 adversarial_perturbation:
-  evasion_attack: BitFlipAttack 
-  surrogate_model : /home/isha/Documents/Adv_Attacks_Defenses/New_CAN_IDS_Pipeline/CANShield_updated/models/Densenet161_CH_DoS_surrogate.h5
-  target_model : /home/isha/Documents/Adv_Attacks_Defenses/New_CAN_IDS_Pipeline/CANShield_updated/models/FrameInceptionResnet_CH_DoS_target.h5
+  evasion_attack: BitFlipAttack
+  surrogate_model: models/surrogate_model.pth
+  target_model: models/target_model.pth
 
+  # ── Genetic Algorithm Attack ─────────────────────────────────────────────
+  # attack_mode: type of CAN attack traffic to perturb
+  #   Options: dos | fuzzy | spoof
   GeneticAdvAttack:
-    attack_mode: dos              # dos | fuzzy | spoof
-    model_path : "Trained_models/target.pth"
+    attack_mode: dos # dos | fuzzy | spoof
+    # model_path : "Trained_models/target.pth"
 
-  FGSM: {}   # uses top-level surrogate_model and target_model
+  # ── FGSM ─────────────────────────────────────────────────────────────────
+  # Uses top-level surrogate_model and target_model; no extra parameters needed.
+  FGSM: {} # uses top-level surrogate_model and target_model
 
+  # ── Bit-Flip Attack ───────────────────────────────────────────────────────
+  # rounds: number of iterative bit-flip rounds
   BitFlipAttack:
     rounds: 3
 
     attack:
-      original_tracksheet: /home/isha/Documents/Adv_Attacks_Defenses/New_CAN_IDS_Pipeline/CANShield_updated/datasets/Demo_dataset/csv_files/DoS_test_track.csv
-      output_dir: "perturbed_target_images_dos_CH"
+      original_tracksheet: "tracksheets_CH/original_tracksheet.csv"  # original tracksheet for reference
+      output_dir: "perturbed_tracksheets_CH"  # directory to save perturbed tracksheets
 
     decode:
-      decoded_output_dir: "decoded_traffic_dos_CH"
+      decoded_output_dir: "decoded_traffic_dos_CH"  # decoded CAN traffic output
 
     evaluate:
-      prediction_output_dir: "prediction_output_dos_CH"
+      prediction_output_dir: "prediction_output_dos_CH"  # model predictions on perturbed samples
 
     update:
-      tracksheet_dir: "tracksheets_CH"
-  
+      tracksheet_dir: "tracksheets_CH"  # updated tracksheets after each round
+
+
+# Adversarial Defense  (robust retraining)
+# defense_method: Options: AdversarialTraining
+# adv_samples: number of adversarial samples to incorporate during retraining
+# adv_examples_path: path to pre-generated adversarial examples,
+#                    or null to generate them on the fly
+
 adversarial_defense:
   defense_method: AdversarialTraining
   adv_samples: 350
